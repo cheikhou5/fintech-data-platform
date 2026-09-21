@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # MAGIC %md
 # MAGIC # 01 - Exploration de la source
 # MAGIC
@@ -46,3 +50,11 @@ display(
 
 cdc = spark.read.json(f"{RAW}/customers_cdc")
 display(cdc.orderBy("customer_id", "seq").limit(50))
+
+# COMMAND ----------
+
+display(tx.filter("amount IS NULL OR amount RLIKE ','"))
+
+# COMMAND ----------
+
+display(tx.filter("_corrupt_record IS NOT NULL"))

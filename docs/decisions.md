@@ -25,10 +25,23 @@ détection de fraude. En contrepartie, les volumes sont modestes et les distribu
 
 ## 002 - (à toi)
 
-**Contexte.**
+**Contexte.** Avant de construire Bronze, exploration manuelle de `raw/transactions` et
+`raw/customers_cdc` sur 10 lots générés (environ 10 200 transactions).
 
-**Options.**
+**Observations.**
+- 199 `transaction_id` apparaissent plus d'une fois (doublons exacts injectés par le générateur).
+- Environ 15 lignes ont un `_corrupt_record` non nul : du JSON tronqué en plein milieu d'un champ
+  (ex. `"merchant_id": "M-00055", "` coupé net), donc totalement illisible, pas juste un champ manquant.
+- La colonne `amount` est lue en `string` par Spark : certaines valeurs sont `null`, d'autres
+  écrites avec une virgule française (`"75,98"`) au lieu d'un point.
+- Dans `customers_cdc`, le client `C-000030` (Ibrahima Sow) a 3 événements : `INSERT` (seq 30,
+  KYC BASIC), puis deux `UPDATE` (seq 536 → STANDARD, seq 619 → PREMIUM). Confirme que `seq`,
+  et non l'ordre des fichiers, doit piloter l'historisation SCD2 en Silver.
 
-**Décision.**
+**Décision.** Ces observations valident les règles de qualité prévues dans
+`docs/data_contract.md` : dédoublonnage sur `transaction_id`, conversion virgule→point avant
+typage de `amount`, quarantaine pour les lignes avec `_corrupt_record` non nul, et `seq` comme
+colonne de séquence pour AUTO CDC.
 
-**Conséquences.**
+**Conséquences.** Le seuil de réussite de la couche Silver est maintenant chiffré : après
+dédoublonnage, 0 doublon sur `transaction_id` (contre 199 aujourd'hui en Bronze).
