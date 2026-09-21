@@ -36,6 +36,11 @@ display(tx.limit(20))
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC Doublons de transaction_id
+
+# COMMAND ----------
+
 # Exemple pour la question 1, à toi d'écrire les suivantes.
 from pyspark.sql import functions as F
 
@@ -48,8 +53,8 @@ display(
 
 # COMMAND ----------
 
-cdc = spark.read.json(f"{RAW}/customers_cdc")
-display(cdc.orderBy("customer_id", "seq").limit(50))
+# MAGIC %md
+# MAGIC 2. Type et valeurs invalides de amount
 
 # COMMAND ----------
 
@@ -57,4 +62,106 @@ display(tx.filter("amount IS NULL OR amount RLIKE ','"))
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC 3. Lignes JSON tronquées
+
+# COMMAND ----------
+
 display(tx.filter("_corrupt_record IS NOT NULL"))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 4. Dates aberrantes ou dans le futur
+# MAGIC
+
+# COMMAND ----------
+
+display(tx.filter(F.col("event_ts") > "2099-01-01"))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 5. Marchands inconnus
+
+# COMMAND ----------
+
+display(
+    tx.join(merchants, "merchant_id", "left_anti")
+      .select("merchant_id")
+      .distinct()
+)
+
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 6. Apparition de device_os
+
+# COMMAND ----------
+
+display(
+    tx_with_file.filter("device_os IS NOT NULL")
+    .select("source_file")
+    .distinct()
+    .orderBy("source_file")
+)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 7. Ordre CDC selon seq
+# MAGIC
+
+# COMMAND ----------
+
+cdc = spark.read.json(f"{RAW}/customers_cdc")
+display(cdc.orderBy("customer_id", "seq").limit(50))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 8. Montants aberrants (fraude)
+
+# COMMAND ----------
+
+display(
+    tx.filter("amount NOT LIKE '%,%'")
+      .selectExpr("cast(amount as double) as amount_num")
+      .summary("min", "25%", "50%", "75%", "max")
+)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 9. Cohérence des statuts
+
+# COMMAND ----------
+
+display(tx.groupBy("status").count())
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 10. Transactions sans client existant
+
+# COMMAND ----------
+
+display(
+    tx.join(customers, "customer_id", "left_anti")
+      .select("customer_id")
+      .distinct()
+)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 11. Chevauchement des dates entre fichiers
+
+# COMMAND ----------
+
+display(
+    tx_with_file.groupBy("source_file")
+    .agg(F.min("event_ts").alias("min_ts"), F.max("event_ts").alias("max_ts"))
+    .orderBy("source_file")
+)
