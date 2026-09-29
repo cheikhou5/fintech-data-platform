@@ -1,0 +1,33 @@
+# Databricks Asset Bundle : décrit TOUT le projet dans des fichiers texte.
+# Un même code, deux environnements :
+#   - dev  : mon bac à sable, où je teste mes modifications
+#   - prod : la version officielle, lue par le tableau de bord
+bundle:
+  name: fintech-data-platform
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Catalogue Unity Catalog où sont écrites les tables
+    default: workspace
+  schema:
+    description: Schéma de destination (un par environnement)
+
+targets:
+  dev:
+    # mode development : ressources préfixées "[dev <utilisateur>]",
+    # pipeline en mode développement (plus rapide à relancer)
+    mode: development
+    default: true
+    variables:
+      schema: fintech_dev
+
+  prod:
+    # mode production : noms propres, vérifications plus strictes
+    mode: production
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      schema: fintech_prod

@@ -31,7 +31,6 @@ def _autoloader_read(subfolder: str):
     return (
         spark.readStream.format("cloudFiles")
         .option("cloudFiles.format", "json")
-        .option("cloudFiles.schemaLocation", f"/Volumes/{CATALOG}/landing/schemas/{subfolder}")
         .option("cloudFiles.inferColumnTypes", "true")
         # addNewColumns : une colonne inconnue (ex. device_os) est ajoutée au
         # schéma plutôt que de faire échouer le flux.

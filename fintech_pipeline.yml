@@ -1,0 +1,20 @@
+# Le pipeline Bronze -> Silver -> Gold, décrit en fichier.
+# Il est créé une fois par environnement ; seul le schéma de destination change.
+resources:
+  pipelines:
+    fintech_pipeline:
+      name: fintech-pipeline
+      catalog: ${var.catalog}
+      schema: ${var.schema}
+      serverless: true
+      # Les fichiers bruts sont lus dans /Volumes/fintech/landing/files/raw
+      # (voir bronze_pipeline.py) : la source est commune aux deux environnements.
+      configuration:
+        catalog: fintech
+      libraries:
+        - file:
+            path: ../pipelines/bronze/bronze_pipeline.py
+        - file:
+            path: ../pipelines/silver/silver_pipeline.py
+        - file:
+            path: ../pipelines/gold/gold_pipeline.py
