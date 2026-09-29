@@ -5,7 +5,7 @@ import pytest
 
 
 @pytest.fixture(scope="session")
-def spSark():
+def spark():
     """Session Spark pour les tests.
 
     Dans Databricks, on réutilise la session du cluster ; ailleurs (poste local,
