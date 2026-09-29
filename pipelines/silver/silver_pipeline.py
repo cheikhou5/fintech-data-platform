@@ -23,7 +23,6 @@ ce qui neutralise les événements CDC périmés injectés par le générateur.
 """
 import dlt
 from pyspark.sql import functions as F
-from pyspark.sql.types import DecimalType
 from pyspark.sql.window import Window
 
 # --------------------------------------------------------------------------
@@ -42,8 +41,13 @@ def v_transactions_cleaned():
     """
     df = dlt.read("bronze_transactions")
 
-    amount_clean = F.regexp_replace(F.col("amount"), ",", ".").cast(DecimalType(12, 2))
-    event_ts_clean = F.to_timestamp("event_ts")
+    # try_cast / try_to_timestamp : une valeur illisible (ex. "abc") devient
+    # NULL, donc un motif de rejet, au lieu de faire planter tout le pipeline.
+    # Mêmes règles que pipelines/silver/quality.py, couvertes par les tests.
+    amount_clean = F.expr(
+        "try_cast(regexp_replace(CAST(amount AS STRING), ',', '.') AS DECIMAL(12, 2))"
+    )
+    event_ts_clean = F.expr("try_to_timestamp(CAST(event_ts AS STRING))")
 
     df = (
         df.withColumn("amount_clean", amount_clean)
@@ -53,7 +57,9 @@ def v_transactions_cleaned():
           .withColumn("is_malformed", F.col("transaction_id").isNull())
     )
 
-    reasons = F.array_remove(
+    # array_compact retire les motifs null ; array_remove(..., None)
+    # renverrait NULL pour toute la colonne et viderait les deux tables.
+    reasons = F.array_compact(
         F.array(
             F.when(df.is_malformed, F.lit("ligne_json_illisible")),
             F.when(~df.is_malformed & df.customer_id.isNull(), F.lit("customer_id_null")),
@@ -61,12 +67,16 @@ def v_transactions_cleaned():
             F.when(~df.is_malformed & (df.amount_clean.isNull() | (df.amount_clean <= 0)),
                    F.lit("amount_invalide")),
             F.when(~df.is_malformed & df.event_ts_clean.isNull(), F.lit("event_ts_invalide")),
-            F.when(~df.is_malformed & (df.event_ts_clean > F.current_timestamp()),
+            # Futur jugé par rapport à l'heure d'ingestion de la ligne, et non à
+            # l'heure du run : règle déterministe, rafraîchissement incrémental
+            # possible. La marge d'un jour absorbe les décalages de fuseau.
+            F.when(~df.is_malformed
+                   & (df.event_ts_clean > df._ingested_at + F.expr("INTERVAL 1 DAY")),
                    F.lit("event_ts_futur")),
-            F.when(~df.is_malformed & ~df.status.isin(*VALID_STATUSES),
+            # Un statut vide (NULL) est aussi un statut invalide.
+            F.when(~df.is_malformed & (df.status.isNull() | ~df.status.isin(*VALID_STATUSES)),
                    F.lit("status_invalide")),
         ),
-        None,
     )
 
     return df.withColumn("rejection_reasons", reasons)
